@@ -41,7 +41,7 @@ class queue():
 def init(bright):
     return neopixel.NeoPixel(board.D18, 64, brightness=bright, auto_write=False)
 
-# turns off all pixels and deinitializes the neopixel matrix 
+# turns off all pixels and deinitializes the neopixel matrix
 def deinit():
     for i in range(0, 64):
         pixels[i] = (0,0,0)
@@ -49,10 +49,24 @@ def deinit():
     pixels.deinit()
 
 
+def symbol(symbol, color):
+	i = 0
+	for char in open('symbols/' + symbol + '.txt', 'r').read():
+		if not char: break
+		if char == '1':
+			pixels[i] = color
+			i += 1
+		elif char == '0':
+			pixels[i] = (0,0,0)
+			i = i + 1
+	pixels.show()
+
+
 class arrow(threading.Thread):
 	def __init__(self, event, freq=0.5):
 		threading.Thread.__init__(self)
 		self.event = event
+		self.event.show = False
 
 		vec1 = [1,0,0,1,1,0,0,1] * 2
 		vec2 = [0,0,1,1,0,0,1,1] * 2
@@ -64,23 +78,23 @@ class arrow(threading.Thread):
 		self.freq = freq
 
 	def run(self):
-		while True:
-			pass
-
-	def show(self):
-		while self.event.is_set():
+		while not self.event.wait(self.freq):
+			if not self.event.show:
+				continue
+			#print('test2')
 			mat = [ i for v in self.vecs for i in v[0+self.shift:8+self.shift]]
 			self.shift = (self.shift + 1) % 4
+			#print(mat)
 			for i, p in enumerate(mat):
 				if p:
 					pixels[i] = (255, 100, 0)
 				else:
 					pixels[i] = (0,0,0)
-				pixels.show()
-				time.sleep(self.freq)
+			pixels.show()
+			#time.sleep(self.freq)
 
 def simple_arrow():
-	vec1 = [1,0,0,1,1,0,0,1]
+	vec1 = [0,0,0,1,1,0,0,1]
 	vec2 = [0,0,1,1,0,0,1,1]
 	vec3 = [0,1,1,0,0,1,1,0]
 	vec4 = [1,1,0,0,1,1,0,0]
@@ -156,35 +170,43 @@ try:
 		GPIO.output(LED_GREEN, GPIO.LOW)
 		time.sleep(0.5)
 
-	pixels = init(0.1)
+	pixels = init(0.3)
 
 	vals = []
 	print('{}s measurement starting now'.format(t))
 	start = time.time()
 
-	#event = threading.Event()
-	#timer = arrow(event, 0.5)
-	#timer.start()
+	event = threading.Event()
+	timer = arrow(event, 0.1)
+	timer.start()
 
 	while time.time() - start < t:
 
 		v1 = run_measurement(PIN_TRIGGER, PIN_ECHO)
-		v2 = run_measurement(PIN_TRIGGER2, PIN_ECHO2, LED_RED, TH2)
+		v2 = run_measurement(PIN_TRIGGER2, PIN_ECHO2)
 		vals.append((v1, v2))
 
-		if v1 < TH:
+		if v2 < TH2:
+			event.show = False
+			symbol('smiley_sad', (255,0,0))
+
+		elif v1 < TH:
 			#print(v2)
-			#event.set()
+			event.show = True
 			#timer.show()
-			simple_arrow()
+			#simple_arrow()
 		else:
-			#event.clear()
-			for i in range(64):
-				pixels[i] = (0,0,0)
-			pixels.show()
+			event.show = False
+			symbol('smiley', (0,255,0))
+			#for i in range(64):
+			#	pixels[i] = (0,0,0)
+			#pixels.show()
+
+	event.set()
 
 	for i, d in enumerate(vals):
 		print('Measurement {}: {} cm, {} cm'.format(i, d[0], d[1]))
+
 
 
 finally:
